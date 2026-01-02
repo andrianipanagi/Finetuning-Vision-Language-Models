@@ -19,8 +19,8 @@ from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model, Pe
 from transformers import AutoProcessor, BitsAndBytesConfig, Idefics3ForConditionalGeneration
 
 #for visible devices to be only 0
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-DEVICE = 1
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+DEVICE = 0
 USE_LORA = False
 USE_QLORA = True
 SMOL = True
@@ -72,7 +72,7 @@ else:
         
 #Load the data
 from datasets import load_dataset
-dataset = load_dataset("json", data_files="vlm_conversation_dataset_modified.json")
+dataset = load_dataset("json", data_files="passengers_bus_vlm_dataset_modified.json")
 
 #split the dataset
 split_ds = dataset["train"].train_test_split(test_size=0.2, seed=42)  # 80% train, 20% validation
@@ -129,21 +129,22 @@ from transformers import Trainer, TrainingArguments
 
 model_name = model_id.split("/")[-1]
 
-new_model = "SmolVLM-Base-2B-finetuned"
+new_model = "SmolVLM-Base-vqav2"
 
 training_args = TrainingArguments(
-    num_train_epochs=20,
+    num_train_epochs=4, #4 epochs for not overfitting
     per_device_train_batch_size=1,
     gradient_accumulation_steps=4,
-    warmup_steps=50,
-    learning_rate=1e-4,
-    weight_decay=0.01,
-    logging_steps=25,
-    save_strategy="steps",
-    save_steps=250,
+    warmup_ratio=0.05,
+    lr_scheduler_type="cosine",
+    learning_rate=1e-5,
+    weight_decay=0.0,
+    logging_steps=10,
+    save_strategy="epoch",
+    #save_steps=25,
     save_total_limit=1,
     optim="paged_adamw_8bit",  # For 8-bit, else use "adamw_hf"
-    bf16=True,  # Enable mixed precision training
+    fp16=True,  
     output_dir=f"./{model_name}-vqav2",
     hub_model_id=f"{model_name}-vqav2",
     report_to="wandb",
@@ -172,4 +173,8 @@ if __name__ == "__main__":
         print("No LoRA or QLoRA, training all parameters.")
     
     trainer.train()
+    
+    # Save only the LoRA adapters
+    trainer.model.save_pretrained(training_args.output_dir)
+
 
